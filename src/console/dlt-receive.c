@@ -91,6 +91,7 @@
 
 DltClient dltclient;
 static bool sig_close_recv = false;
+static bool sig_usr1_recv = false;
 
 void signal_handler(int signal)
 {
@@ -103,6 +104,9 @@ void signal_handler(int signal)
         sig_close_recv = true;
         shutdown(dltclient.receiver.fd, SHUT_RD);
         break;
+    case SIGUSR1:
+        sig_usr1_recv = true;
+        break;
     default:
         /* This case should never happen! */
         break;
@@ -112,6 +116,7 @@ void signal_handler(int signal)
 
 /* Function prototypes */
 int dlt_receive_message_callback(DltMessage *message, void *data);
+int dlt_send_dlt_injection(char *data);
 
 typedef struct {
     int aflag;
@@ -127,6 +132,7 @@ typedef struct {
     char *fvalue;       /* filename for space separated filter file (<AppID> <ContextID>) */
     char *jvalue;       /* filename for json filter file */
     char *evalue;
+    char *injectMessage;
     int bvalue;
     int rvalue;
     int sendSerialHeaderFlag;
@@ -178,6 +184,7 @@ void usage()
     printf("  -j filename   Enable filtering of messages with filter defined in json file\n");
     printf("  -p port       Use the given port instead the default port\n");
     printf("                Cannot be used with serial devices\n");
+    printf("  -I injection  Set up DLT injection message, trigger by sending SIGUSR1 to the process\n");
 }
 
 
@@ -317,6 +324,13 @@ void dlt_receive_close_output_file(DltReceiveData *dltdata)
     }
 }
 
+int  dlt_send_dlt_injection(char *data)
+{
+    dlt_vlog(LOG_INFO, "Sending DLT injection for %s\n", data);
+    // TODO Implement setting the application ID, context ID, Service and actual data here
+    return 0;
+}
+
 
 /**
  * Main function of tool.
@@ -345,11 +359,12 @@ int main(int argc, char *argv[])
     sigaction(SIGTERM, &act, 0);
     sigaction(SIGINT, &act, 0);
     sigaction(SIGQUIT, &act, 0);
+    sigaction(SIGUSR1, &act, 0);
 
     /* Fetch command line arguments */
     opterr = 0;
 
-    while ((c = getopt(argc, argv, "vashSRyuxmf:j:o:e:b:c:p:i:r:")) != -1)
+    while ((c = getopt(argc, argv, "vashSRyuxmf:j:o:e:b:c:p:i:r:I:")) != -1)
         switch (c) {
         case 'v':
         {
@@ -444,6 +459,11 @@ int main(int argc, char *argv[])
 
             dltdata.ovaluebase[to_copy] = '\0';
             memcpy(dltdata.ovaluebase, dltdata.ovalue, to_copy);
+            break;
+        }
+        case 'I':
+        {
+            dltdata.injectMessage = optarg;
             break;
         }
         case 'e':
@@ -634,6 +654,8 @@ int main(int argc, char *argv[])
             if (dltdata.rflag == 1 && sig_close_recv == false) {
                 dlt_vlog(LOG_INFO, "Reconnect to server with %d milli seconds specified\n", dltdata.rvalue);
                 sleep(dltdata.rvalue / 1000);
+            } else if (sig_close_recv == false && sig_usr1_recv == true) {
+                dlt_send_dlt_injection(dltdata.injectMessage);
             } else {
                 /* Dlt Client Cleanup */
                 dlt_client_cleanup(&dltclient, dltdata.vflag);
