@@ -324,10 +324,24 @@ void dlt_receive_close_output_file(DltReceiveData *dltdata)
     }
 }
 
-int  dlt_send_dlt_injection(char *data)
+int dlt_send_dlt_injection(char *data)
 {
     dlt_vlog(LOG_INFO, "Sending DLT injection for %s\n", data);
     // TODO Implement setting the application ID, context ID, Service and actual data here
+    // "APPL CID ServiceID data"
+    char *injectionApplicationId;
+    char *injectionContextId;
+    char *injectionServiceId;
+    char *injectionData;
+    injectionApplicationId = strtok(data, " ");
+    injectionContextId = strtok(NULL, " ");
+    injectionServiceId = strtok(NULL, " ");
+    injectionData = strtok(NULL, " ");
+    uint32_t serviceID = (uint32_t)strtol(injectionServiceId, NULL, 0);
+    dlt_vlog(LOG_INFO, "Got APID %s, CID %s, ServiceId %d, Data %s\nConstructing message...", injectionApplicationId, injectionContextId, serviceID, injectionData);
+    uint32_t size = strlen(injectionData);
+    dlt_client_send_inject_msg(&dltclient, injectionApplicationId, injectionContextId, serviceID, (uint8_t*)&injectionData, size);
+    dlt_vlog(LOG_INFO, "Message sent\n");
     return 0;
 }
 
